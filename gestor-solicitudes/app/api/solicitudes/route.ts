@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { solicitudes } from "@/lib/solicitudesStore";
+import { getSolicitudesCollection } from "@/lib/database";
 import { Solicitud } from "@/models/Solicitud";
 
 export async function POST(req: Request) {
@@ -10,15 +10,15 @@ export async function POST(req: Request) {
                 { message: "No autorizado" },
                 { status: 401 }
             );
-        } const body = await req.json();
+        }
+        const body = await req.json();
         const { titulo, descripcion, tipo, userId, userEmail } = body;
         if (!titulo || !descripcion || !tipo || !userId || !userEmail) {
             return NextResponse.json(
                 { message: "Todos los campos son obligatorios" },
-                { status: 400 }
-            );
+                { status: 400 });
         }
-        const nuevaSolicitud: Solicitud = {
+        const nuevaSolicitud = {
             id: Date.now().toString(),
             userId,
             userEmail,
@@ -29,7 +29,8 @@ export async function POST(req: Request) {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
-        solicitudes.push(nuevaSolicitud);
+        const solicitudesDB = await getSolicitudesCollection();
+        solicitudesDB.insert(nuevaSolicitud);
         return NextResponse.json(
             {
                 message: "Solicitud creada correctamente",
@@ -50,6 +51,7 @@ export async function GET(req: Request) {
         const authHeader = req.headers.get("authorization");
         const role = req.headers.get("role");
         const userId = req.headers.get("userid");
+        const solicitudesDB = await getSolicitudesCollection();
         if (!authHeader) {
             return NextResponse.json(
                 { message: "No autorizado" },
@@ -57,21 +59,20 @@ export async function GET(req: Request) {
             );
         }
         if (!role || !userId) {
-            return NextResponse.json(
-                { message: "Información de usuario incompleta" }, { status: 400 }
+            return NextResponse.json({ message: "Información de usuario incompleta" },
+                { status: 400 }
             );
         }
+        const todasLasSolicitudes = solicitudesDB.find();
         // Admin puede ver todo
         if (role === "admin") {
             return NextResponse.json(
-                { solicitudes },
+                { solicitudes: todasLasSolicitudes },
                 { status: 200 }
             );
         }
-        // Usuario solo ve sus solicitudes
-        const misSolicitudes = solicitudes.filter(
-            (s) => s.userId === userId
-        );
+        // Usuario solo ve las suyas
+        const misSolicitudes = solicitudesDB.find({ userId });
         return NextResponse.json(
             { solicitudes: misSolicitudes },
             { status: 200 }
